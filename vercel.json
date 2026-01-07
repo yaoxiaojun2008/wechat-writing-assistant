@@ -9,30 +9,30 @@
       }
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/api/auth/(.*)",
-      "dest": "/api/auth/$1"
+      "source": "/api/auth/:path*",
+      "destination": "/api/auth/:path*"
     },
     {
-      "src": "/api/content/(.*)",
-      "dest": "/api/content/$1"
+      "source": "/api/content/:path*",
+      "destination": "/api/content/:path*"
     },
     {
-      "src": "/api/voice/(.*)",
-      "dest": "/api/voice/$1"
+      "source": "/api/voice/:path*",
+      "destination": "/api/voice/:path*"
     },
     {
-      "src": "/api/wechat/(.*)",
-      "dest": "/api/wechat/$1"
+      "source": "/api/wechat/:path*",
+      "destination": "/api/wechat/:path*"
     },
     {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
     },
     {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/((?!api).*)",
+      "destination": "/index.html"
     }
   ],
   "env": {

@@ -10,6 +10,32 @@ This guide explains how to deploy the WeChat Writing Assistant application to Ve
 - WeChat Official Account credentials (optional, for full functionality)
 - API keys for AI services (DeepSeek, OpenAI, etc.)
 
+## Deployment Scenarios
+
+There are two recommended approaches for deploying this application:
+
+### Approach 1: Separated Deployment (Recommended)
+
+Deploy the frontend to Vercel and the backend to another platform (like Render, Railway, or AWS):
+
+#### Frontend (Vercel)
+- Deploy to Vercel with `VITE_API_URL` pointing to your backend server
+- Configure in Vercel Dashboard: `VITE_API_URL=https://your-backend-server.com/api`
+
+#### Backend (Separate Platform)
+- Deploy to a platform that supports long-running Node.js processes
+- Configure `FRONTEND_URL` to point to your Vercel frontend URL
+- Example: `FRONTEND_URL=https://your-project.vercel.app`
+
+### Approach 2: Vercel-Only Deployment (With Limitations)
+
+Convert the backend to Vercel Serverless Functions (as implemented in this project):
+
+- All API routes are converted to Vercel Functions
+- Frontend remains on Vercel
+- Backend runs as Serverless Functions on Vercel
+- Some limitations due to serverless nature (cold starts, execution timeouts)
+
 ## Deployment Steps
 
 ### 1. Prepare Your Repository
@@ -48,6 +74,27 @@ vercel
 
 ### 3. Configure Environment Variables
 
+Based on your deployment approach:
+
+#### For Separated Deployment (Recommended):
+
+**Frontend on Vercel:**
+Add these environment variables in the Vercel dashboard under Settings > Environment Variables:
+- `VITE_API_URL`: The URL of your backend server (e.g., `https://your-backend.onrender.com/api`)
+
+**Backend on Separate Platform:**
+Configure these environment variables on your backend hosting platform:
+- `FRONTEND_URL`: The URL of your Vercel frontend (e.g., `https://your-project.vercel.app`)
+- `DEFAULT_PASSWORD`: The default password for login (default: `Admin!234`)
+- `JWT_SECRET`: Secret key for JWT token signing
+- `WECHAT_APP_ID`: Your WeChat Official Account App ID (optional)
+- `WECHAT_APP_SECRET`: Your WeChat Official Account App Secret (optional)
+- `AI_PROVIDER`: Which AI provider to use (e.g., `deepseek`, `openai`)
+- `DEEPSEEK_API_KEY`: DeepSeek API key
+- `OPENAI_API_KEY`: OpenAI API key (if using OpenAI)
+
+#### For Vercel-Only Deployment:
+
 Add the following environment variables in the Vercel dashboard under Settings > Environment Variables:
 
 - `DEFAULT_PASSWORD`: The default password for login (default: `Admin!234`)
@@ -58,6 +105,7 @@ Add the following environment variables in the Vercel dashboard under Settings >
 - `DEEPSEEK_API_KEY`: DeepSeek API key
 - `OPENAI_API_KEY`: OpenAI API key (if using OpenAI)
 - `BACKEND_URL`: URL of a separate backend instance (if proxying to external service)
+- `VITE_API_URL`: Set to `/api` since API routes are handled internally
 
 ### 4. Build and Deploy
 
@@ -118,6 +166,10 @@ Since Vercel Functions are stateless, the application uses:
 3. **API Timeout Errors**
    - Optimize API function performance
    - Consider upgrading to Pro plan for longer execution time
+
+4. **CORS Issues in Separated Deployment**
+   - Ensure `FRONTEND_URL` is correctly set in backend
+   - Make sure `VITE_API_URL` points to the correct backend
 
 ### Debugging
 
