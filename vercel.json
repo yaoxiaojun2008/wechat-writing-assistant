@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "framework": "none",
+  "framework": "vite",
   "rewrites": [
     {
       "source": "/api/(.*)",
