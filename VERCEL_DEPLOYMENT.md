@@ -97,6 +97,7 @@ Configure these environment variables on your backend hosting platform:
 
 Add the following environment variables in the Vercel dashboard under Settings > Environment Variables:
 
+- `VITE_API_URL`: Set to `/api` since API routes are handled internally
 - `DEFAULT_PASSWORD`: The default password for login (default: `Admin!234`)
 - `JWT_SECRET`: Secret key for JWT token signing
 - `WECHAT_APP_ID`: Your WeChat Official Account App ID (optional)
@@ -104,8 +105,8 @@ Add the following environment variables in the Vercel dashboard under Settings >
 - `AI_PROVIDER`: Which AI provider to use (e.g., `deepseek`, `openai`)
 - `DEEPSEEK_API_KEY`: DeepSeek API key
 - `OPENAI_API_KEY`: OpenAI API key (if using OpenAI)
-- `BACKEND_URL`: URL of a separate backend instance (if proxying to external service)
-- `VITE_API_URL`: Set to `/api` since API routes are handled internally
+
+Alternatively, you can set `VITE_API_URL` in the `vercel.json` file as shown in this project.
 
 ### 4. Build and Deploy
 
@@ -114,6 +115,18 @@ Once configured, Vercel will automatically build and deploy your application. Th
 1. Installing frontend dependencies
 2. Building the React application with Vite
 3. Setting up API routes for server-side functionality
+
+## How the Frontend Discovers the Backend URL
+
+The frontend application discovers the backend URL through the `VITE_API_URL` environment variable:
+
+1. **During Build Time**: When Vercel builds the application, it injects the environment variables into the build process.
+
+2. **Runtime Configuration**: The application reads the `VITE_API_URL` value and uses it as the base URL for all API requests.
+
+3. **API Service Integration**: The application's API service files (e.g., `src/services/api.ts`) use this URL to construct the full API endpoint paths.
+
+4. **Deployment Flexibility**: This approach allows the same codebase to work with different backend URLs depending on the deployment environment.
 
 ## Vercel-Specific Implementation Details
 

@@ -217,6 +217,17 @@ To learn more about the Vercel compatible version, see [VERSION_VERCEL.md](./VER
 
 For deployment instructions to Vercel, see [VERCEL_DEPLOYMENT.md](./VERCEL_DEPLOYMENT.md).
 
+## How the Frontend Discovers Backend URL
+
+The frontend application discovers the backend API URL through the `VITE_API_URL` environment variable:
+
+- **Local Development**: Points to the backend server (typically `http://localhost:3001/api`)
+- **Vercel Deployment**: Depends on the deployment strategy:
+  - **Separated Deployment**: Points to the external backend server (e.g., `https://your-backend.onrender.com/api`)
+  - **Vercel-Only Deployment**: Uses relative path (`/api`) to access Vercel Serverless Functions
+
+In Vercel deployments, this environment variable must be configured in the Vercel project settings to ensure the frontend knows where to send API requests.
+
 ## Features
 
 - 🎤 **Voice Input**: Utilizes browser Web Speech API for voice recording and real-time conversion to text
@@ -291,6 +302,21 @@ AI_PROVIDER=deepseek
 DEEPSEEK_API_KEY=your-deepseek-api-key
 OPENAI_API_KEY=your-openai-api-key
 OPENAI_MODEL=gpt-3.5-turbo
+```
+
+Example frontend `.env`:
+```
+# API Configuration
+# For local development: point to your backend server
+# VITE_API_URL=http://localhost:3001/api
+
+# For production deployment on Vercel with separate backend:
+# Replace with your actual backend server URL
+# VITE_API_URL=https://your-backend-domain.com/api
+
+# For Vercel deployment with Serverless Functions (all-in-one):
+# Use relative path to point to Vercel Functions
+VITE_API_URL=/api
 ```
 
 ## Project Structure

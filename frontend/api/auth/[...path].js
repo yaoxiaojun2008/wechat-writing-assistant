@@ -3,30 +3,15 @@ import jwt from 'jsonwebtoken';
 
 // Simple in-memory store for demo purposes
 // In production, use a proper database or external service
-let defaultUser = null;
+const DEFAULT_USER_ID = 'default-user';
+const DEFAULT_PASSWORD = process.env.DEFAULT_PASSWORD || 'Admin!234';
 
-// Initialize default user with hashed password
-const initializeDefaultUser = async () => {
-  if (defaultUser) return; // Already initialized
-
-  const bcrypt = (await import('bcrypt')).default;
-  const defaultPassword = process.env.DEFAULT_PASSWORD || 'Admin!234';
-  
-  const saltRounds = 10;
-  const passwordHash = await bcrypt.hash(defaultPassword, saltRounds);
-  
-  defaultUser = {
-    id: 'default-user',
-    passwordHash,
-    createdAt: new Date(),
-    lastLoginAt: null
-  };
+// Simple comparison function (not using bcrypt for Vercel compatibility)
+const comparePassword = (inputPassword, storedPassword) => {
+  return inputPassword === storedPassword;
 };
 
 export default async function handler(req, res) {
-  // Initialize user if not already done
-  await initializeDefaultUser();
-
   const { path } = req.query;
   const fullPath = Array.isArray(path) ? `/${path.join('/')}` : path || '';
 
@@ -43,20 +28,17 @@ export default async function handler(req, res) {
     }
 
     try {
-      const bcrypt = (await import('bcrypt')).default;
-      const isValid = await bcrypt.compare(password, defaultUser.passwordHash);
+      // Compare passwords
+      const isValid = comparePassword(password, DEFAULT_PASSWORD);
 
       if (!isValid) {
         return res.status(401).json({ error: 'Invalid password' });
       }
 
-      // Update last login
-      defaultUser.lastLoginAt = new Date();
-
       // Generate JWT token
       const secret = process.env.JWT_SECRET || 'fallback_secret_for_development_only';
       const token = jwt.sign(
-        { userId: defaultUser.id, timestamp: Date.now() },
+        { userId: DEFAULT_USER_ID, timestamp: Date.now() },
         secret,
         { expiresIn: '24h' }
       );
@@ -72,9 +54,9 @@ export default async function handler(req, res) {
         success: true,
         data: {
           user: {
-            id: defaultUser.id,
-            createdAt: defaultUser.createdAt,
-            lastLoginAt: defaultUser.lastLoginAt
+            id: DEFAULT_USER_ID,
+            createdAt: new Date().toISOString(),
+            lastLoginAt: new Date().toISOString()
           },
           token
         }
@@ -127,8 +109,8 @@ export default async function handler(req, res) {
         data: {
           valid: true,
           user: {
-            id: defaultUser.id,
-            lastLoginAt: defaultUser.lastLoginAt
+            id: DEFAULT_USER_ID,
+            lastLoginAt: new Date().toISOString()
           }
         }
       });
@@ -161,9 +143,9 @@ export default async function handler(req, res) {
         success: true,
         data: {
           user: {
-            id: defaultUser.id,
-            createdAt: defaultUser.createdAt,
-            lastLoginAt: defaultUser.lastLoginAt
+            id: DEFAULT_USER_ID,
+            createdAt: new Date().toISOString(),
+            lastLoginAt: new Date().toISOString()
           }
         }
       });
