@@ -190,7 +190,168 @@ API服务运行在 `http://localhost:3001`
 **注意**: 本项目仍在开发中，功能可能会有变化。请关注更新日志了解最新变化。
 
 
+# WeChat Writing Assistant
 
+A comprehensive web application for content creators to enhance article creation efficiency through voice input and AI-assisted editing, with seamless integration to WeChat Official Accounts platform.
 
+## Version Information
 
+**Current Stable Release: Version 1.0**
 
+- **Technology Stack**: Vite + Express + TypeScript
+- **Release Type**: Local Runtime Environment
+- **Architecture**: Frontend-Backend Separation
+- **Features**: Voice Input, AI Editing, Content Management, WeChat Integration
+
+For detailed version information, see [VERSION.md](./VERSION.md).
+
+## Vercel Compatible Version
+
+We have also created a Vercel-compatible version that allows deployment to Vercel's serverless infrastructure:
+
+- **Architecture**: Static frontend with Vercel Serverless Functions
+- **Benefits**: Fast global CDN, auto-scaling, zero-config deployments
+- **Compatibility**: Maintains all core functionality with adaptations for serverless constraints
+
+To learn more about the Vercel compatible version, see [VERSION_VERCEL.md](./VERSION_VERCEL.md).
+
+For deployment instructions to Vercel, see [VERCEL_DEPLOYMENT.md](./VERCEL_DEPLOYMENT.md).
+
+## Features
+
+- 🎤 **Voice Input**: Utilizes browser Web Speech API for voice recording and real-time conversion to text
+- 🤖 **AI Editing**: Integrates multiple AI services (DeepSeek, OpenAI, Google Gemini) for intelligent text optimization
+- 📝 **Content Management**: Provides rich text editor with real-time draft saving and version history tracking
+- 📱 **WeChat Integration**: Directly connects to WeChat Official Account API for draft management and publishing status
+- ⏰ **Scheduled Publishing**: Supports setting future times for automatic article publishing
+- 🔐 **Secure Authentication**: JWT-based session authentication mechanism for data security
+
+## Tech Stack
+
+- **Frontend**: React 18 + TypeScript, built with Vite
+- **UI Library**: Material-UI (MUI)
+- **Backend**: Node.js + Express + TypeScript
+- **State Management**: React Context + React Query
+- **Type Safety**: Full-stack TypeScript for type safety
+
+## Prerequisites
+
+- Node.js >= 18.0.0
+- npm >= 9.0.0
+- Redis >= 6.0 (optional, for advanced features)
+- Docker (optional, for containerized deployment)
+
+## Getting Started
+
+1. Clone the repository
+2. Install dependencies for both frontend and backend:
+
+```bash
+# In project root
+npm install
+cd frontend && npm install
+cd ../backend && npm install
+```
+
+3. Configure environment variables in `.env` files
+4. Start the development servers:
+
+```bash
+# From project root to start both servers
+npm run dev
+
+# Or separately
+npm run dev:frontend  # Runs on http://localhost:3000
+npm run dev:backend   # Runs on http://localhost:3001
+```
+
+## Environment Variables
+
+Create `.env` files in both frontend and backend directories with appropriate configurations.
+
+Example backend `.env`:
+```
+# Server Configuration
+NODE_ENV=development
+PORT=3001
+FRONTEND_URL=http://localhost:3000
+
+# Authentication
+DEFAULT_PASSWORD=Admin!234
+JWT_SECRET=your-super-secret-jwt-key-here-change-in-production
+SESSION_SECRET=wechat-session-secret-key-2024-development-only
+
+# WeChat API Configuration
+WECHAT_APP_ID=your-wechat-app-id
+WECHAT_APP_SECRET=your-wechat-app-secret
+USE_REAL_WECHAT_API=false
+
+# AI Configuration
+AI_PROVIDER=deepseek
+DEEPSEEK_API_KEY=your-deepseek-api-key
+OPENAI_API_KEY=your-openai-api-key
+OPENAI_MODEL=gpt-3.5-turbo
+```
+
+## Project Structure
+
+```
+weixin/
+├── frontend/              # React/Vite frontend
+│   ├── src/
+│   │   ├── components/    # React components
+│   │   ├── hooks/         # Custom React hooks
+│   │   └── services/      # Service functions
+│   ├── public/
+│   └── package.json
+├── backend/               # Express/Node.js backend
+│   ├── src/
+│   │   ├── routes/        # API route handlers
+│   │   ├── services/      # Business logic services
+│   │   ├── middleware/    # Express middleware
+│   │   ├── utils/         # Utility functions
+│   │   └── types/         # TypeScript type definitions
+│   ├── package.json
+└── README.md
+```
+
+## Deployment
+
+### Local Development Deployment
+
+For local development, use the traditional setup:
+
+```bash
+# From project root to start both servers
+npm run dev
+
+# Or separately
+npm run dev:frontend  # Runs on http://localhost:3000
+npm run dev:backend   # Runs on http://localhost:3001
+```
+
+### Production Deployment (Traditional)
+
+For production deployment with traditional architecture, build the frontend and start the backend:
+
+```bash
+# Build frontend
+cd frontend && npm run build
+
+# Start backend
+cd backend && npm start
+```
+
+### Vercel Deployment
+
+For deployment to Vercel's serverless platform:
+
+1. Ensure your repository is connected to Vercel
+2. Add environment variables to your Vercel project settings
+3. Configure the build settings as described in [VERCEL_DEPLOYMENT.md](./VERCEL_DEPLOYMENT.md)
+
+## License
+
+This project is licensed under the MIT License.
+
+```

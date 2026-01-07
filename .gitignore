@@ -125,3 +125,5 @@ __pycache__/
 *.sublime-project
 *.sublime-workspace
 .vscode/settings.json
+.vercel
+.env*.local
