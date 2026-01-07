@@ -9,6 +9,7 @@ import { createError } from '../middleware/errorHandler.js';
 class AIEditingServiceImpl implements AIEditingService {
   private openai: OpenAI | null = null;
   private gemini: GoogleGenerativeAI | null = null;
+  private deepSeek: OpenAI | null = null; // DeepSeek is compatible with OpenAI's API
   private readonly maxRetries = 3;
   private readonly timeout = 30000; // 30 seconds
   private readonly aiProvider: string;
@@ -22,6 +23,16 @@ class AIEditingServiceImpl implements AIEditingService {
       } else {
         this.gemini = new GoogleGenerativeAI(config.ai.gemini.apiKey);
         logger.info('Gemini AI initialized for content editing');
+      }
+    } else if (this.aiProvider === 'deepseek') {
+      if (!config.ai.deepseek.apiKey || config.ai.deepseek.apiKey === 'your-deepseek-api-key-here') {
+        logger.warn('DeepSeek API key not configured, AI editing will use mock responses');
+      } else {
+        this.deepSeek = new OpenAI({
+          apiKey: config.ai.deepseek.apiKey,
+          baseURL: config.ai.deepseek.baseURL || 'https://api.deepseek.com',
+        });
+        logger.info('DeepSeek AI initialized for content editing');
       }
     } else {
       // Default to OpenAI
@@ -49,7 +60,7 @@ class AIEditingServiceImpl implements AIEditingService {
       }
 
       // If no AI provider is configured, return mock edited content
-      if (!this.openai && !this.gemini) {
+      if (!this.openai && !this.gemini && !this.deepSeek) {
         logger.info('Using mock AI editing (no AI provider configured)');
         return this.mockEditContent(originalText, options);
       }
@@ -61,9 +72,11 @@ class AIEditingServiceImpl implements AIEditingService {
         
         if (this.aiProvider === 'gemini' && this.gemini) {
           editedText = await this.callGemini(prompt);
+        } else if (this.aiProvider === 'deepseek' && this.deepSeek) {
+          editedText = await this.callDeepSeek(prompt);
         } else if (this.openai) {
-          const completion = await this.callOpenAI(prompt);
-          editedText = this.extractEditedContent(completion);
+          // callOpenAI 现在直接返回字符串
+          editedText = await this.callOpenAI(prompt);
         } else {
           throw new Error('No AI provider available');
         }
@@ -91,7 +104,7 @@ class AIEditingServiceImpl implements AIEditingService {
     try {
       logger.info('Preserving writing style', { textLength: text.length });
 
-      if (!this.openai && !this.gemini) {
+      if (!this.openai && !this.gemini && !this.deepSeek) {
         logger.info('Using mock style preservation (no AI provider configured)');
         return this.mockPreserveStyle(text);
       }
@@ -116,7 +129,7 @@ class AIEditingServiceImpl implements AIEditingService {
     try {
       logger.info('Correcting spelling and grammar', { textLength: text.length });
 
-      if (!this.openai && !this.gemini) {
+      if (!this.openai && !this.gemini && !this.deepSeek) {
         logger.info('Using mock grammar correction (no AI provider configured)');
         return this.mockCorrectGrammar(text);
       }
@@ -141,7 +154,7 @@ class AIEditingServiceImpl implements AIEditingService {
     try {
       logger.info('Reorganizing paragraphs', { textLength: text.length });
 
-      if (!this.openai && !this.gemini) {
+      if (!this.openai && !this.gemini && !this.deepSeek) {
         logger.info('Using mock paragraph reorganization (no AI provider configured)');
         return this.mockReorganizeParagraphs(text);
       }
@@ -245,18 +258,24 @@ class AIEditingServiceImpl implements AIEditingService {
       try {
         logger.debug(`OpenAI API call attempt ${attempt}/${this.maxRetries}`);
 
-        const completion = await Promise.race([
+        if (!this.openai) {
+          throw new Error('OpenAI client not initialized');
+        }
+
+        const systemPrompt = '你是一个专业的中文文本编辑助手，专门为微信公众号内容进行优化。请始终用中文回复，并直接返回编辑后的文本，不要添加任何解释。';
+
+        const result = await Promise.race([
           this.openai.chat.completions.create({
-            model: config.openai.model,
+            model: config.ai.openai.model,
             messages: [
               {
                 role: 'system',
-                content: '你是一个专业的中文文本编辑助手，专门为微信公众号内容进行优化。请始终用中文回复，并直接返回编辑后的文本，不要添加任何解释。'
+                content: systemPrompt,
               },
               {
                 role: 'user',
-                content: prompt
-              }
+                content: prompt,
+              },
             ],
             max_tokens: 2000,
             temperature: 0.3,
@@ -266,12 +285,13 @@ class AIEditingServiceImpl implements AIEditingService {
           )
         ]);
 
-        const content = completion.choices[0]?.message?.content;
-        if (!content) {
-          throw new Error('OpenAI API returned empty response');
+        if (!result || !result.choices || result.choices.length === 0 || !result.choices[0]?.message?.content) {
+          throw new Error('Invalid response from OpenAI API');
         }
+        
+        const editedText = result.choices[0].message.content.trim();
 
-        return content;
+        return editedText;
       } catch (error) {
         lastError = error as Error;
         logger.warn(`OpenAI API call attempt ${attempt} failed:`, error);
@@ -285,6 +305,62 @@ class AIEditingServiceImpl implements AIEditingService {
     }
 
     throw lastError || new Error('OpenAI API call failed after all retries');
+  }
+
+  private async callDeepSeek(prompt: string): Promise<string> {
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      try {
+        logger.debug(`DeepSeek API call attempt ${attempt}/${this.maxRetries}`);
+
+        if (!this.deepSeek) {
+          throw new Error('DeepSeek client not initialized');
+        }
+
+        const systemPrompt = '你是一个专业的中文文本编辑助手，专门为微信公众号内容进行优化。请始终用中文回复，并直接返回编辑后的文本，不要添加任何解释。';
+
+        const result = await Promise.race([
+          this.deepSeek.chat.completions.create({
+            model: config.ai.deepseek.model || 'deepseek-chat',
+            messages: [
+              {
+                role: 'system',
+                content: systemPrompt,
+              },
+              {
+                role: 'user',
+                content: prompt,
+              },
+            ],
+            max_tokens: 2000,
+            temperature: 0.3,
+          }),
+          new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('DeepSeek API timeout')), this.timeout)
+          )
+        ]);
+
+        if (!result || !result.choices || result.choices.length === 0 || !result.choices[0]?.message?.content) {
+          throw new Error('Invalid response from DeepSeek API');
+        }
+        
+        const editedText = result.choices[0].message.content.trim();
+
+        return editedText;
+      } catch (error) {
+        lastError = error as Error;
+        logger.warn(`DeepSeek API call attempt ${attempt} failed:`, error);
+        
+        if (attempt < this.maxRetries) {
+          // Exponential backoff
+          const delay = Math.pow(2, attempt) * 1000;
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    throw lastError || new Error('DeepSeek API call failed after all retries');
   }
 
   private async callGemini(prompt: string): Promise<string> {
@@ -306,7 +382,15 @@ class AIEditingServiceImpl implements AIEditingService {
           },
         });
 
-        const systemPrompt = '你是一个专业的微信公众号内容编辑专家，擅长将语音转录文本优化为高质量的公众号文章。你的任务是大幅改善文本质量，将口语化内容转换为书面语，优化结构和表达，但保持原意不变。请始终用中文回复，直接返回优化后的文章内容，不要添加任何解释。';
+        const systemPrompt = `
+        角色：你是一个专业的自媒体内容编辑专家。
+        任务：对文章进行检查优化。
+        要求： - 修正语法错误和错别字
+              - 优化结构和表达，但保持原意不变。
+              - 请始终用中文回复，直接返回优化后的文章内容，不要添加任何解释。
+        限制： - 不要改变原有语言风格特色
+               - 不要做大幅度深度修改
+        `;
         const fullPrompt = `${systemPrompt}\n\n${prompt}`;
 
         const result = await Promise.race([
@@ -342,7 +426,10 @@ class AIEditingServiceImpl implements AIEditingService {
   private async callAI(prompt: string): Promise<string> {
     if (this.aiProvider === 'gemini' && this.gemini) {
       return await this.callGemini(prompt);
+    } else if (this.aiProvider === 'deepseek' && this.deepSeek) {
+      return await this.callDeepSeek(prompt);
     } else if (this.openai) {
+      // callOpenAI 现在直接返回字符串，所以这里也直接返回
       return await this.callOpenAI(prompt);
     } else {
       throw new Error('No AI provider available');
@@ -350,22 +437,26 @@ class AIEditingServiceImpl implements AIEditingService {
   }
 
   private extractEditedContent(response: string): string {
-    // Clean up the response by removing any unwanted prefixes or suffixes
-    let cleaned = response.trim();
+    // 如果 response 已经是纯文本，则直接返回
+    if (typeof response === 'string') {
+      let cleaned = response.trim();
     
-    // Remove common AI response patterns
-    const patterns = [
-      /^编辑后的文本：?\s*/i,
-      /^修正后的文本：?\s*/i,
-      /^优化后的文本：?\s*/i,
-      /^以下是编辑后的内容：?\s*/i,
-    ];
+      // Remove common AI response patterns
+      const patterns = [
+        /^编辑后的文本：?\s*/i,
+        /^修正后的文本：?\s*/i,
+        /^优化后的文本：?\s*/i,
+        /^以下是编辑后的内容：?\s*/i,
+      ];
 
-    for (const pattern of patterns) {
-      cleaned = cleaned.replace(pattern, '');
+      for (const pattern of patterns) {
+        cleaned = cleaned.replace(pattern, '');
+      }
+
+      return cleaned.trim();
     }
-
-    return cleaned.trim();
+    // 如果 response 是对象，则尝试从中提取文本
+    return String(response).trim();
   }
 
   // Mock implementations for when AI API is not available
@@ -500,7 +591,7 @@ class AIEditingServiceImpl implements AIEditingService {
 
   async generateAISuggestions(text: string): Promise<AISuggestion[]> {
     try {
-      if (!this.openai && !this.gemini) {
+      if (!this.openai && !this.gemini && !this.deepSeek) {
         return this.mockGenerateSuggestions(text);
       }
 

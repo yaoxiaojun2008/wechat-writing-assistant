@@ -117,9 +117,6 @@ export function LoginForm() {
                 )}
               </Button>
 
-              <Typography variant="caption" color="text.secondary" textAlign="center" display="block">
-                开发环境默认密码: admin123
-              </Typography>
             </Box>
           </CardContent>
         </Card>

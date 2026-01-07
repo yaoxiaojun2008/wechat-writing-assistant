@@ -14,6 +14,7 @@ export interface WeChatConfig {
   appSecret: string;
   accessToken?: string;
   tokenExpiresAt?: Date;
+  defaultThumbMediaId?: string;
 }
 
 export interface UserPreferences {
@@ -73,6 +74,7 @@ export interface Draft {
   updatedAt: Date;
   publishedAt?: Date;
   scheduledAt?: Date;
+  thumbnailUrl?: string; // Add this if you intend to use it
 }
 
 export interface PublishOptions {
@@ -166,4 +168,19 @@ export interface LoginRequest {
 export interface LoginResponse {
   user: Omit<User, 'passwordHash'>;
   sessionId: string;
+}
+
+// WeChat API response types
+export interface CreateDraftResponse {
+  media_id?: string;
+  errcode?: number;
+  errmsg?: string;
+}
+
+export interface UploadImgResponse {
+  media_id?: string;
+  url?: string;
+  item?: any[];
+  errcode?: number;
+  errmsg?: string;
 }

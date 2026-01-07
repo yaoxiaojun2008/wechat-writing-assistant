@@ -1,21 +1,17 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { createClient } from 'redis';
 import { config } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 import { AuthService, User } from '../types/index.js';
 import { createError } from '../middleware/errorHandler.js';
 
 class AuthServiceImpl implements AuthService {
-  private redisClient;
-  private inMemoryStore: Map<string, any> = new Map();
-  private useRedis = false;
   private readonly defaultUser = {
     id: 'default-user',
-    passwordHash: '', // Will be set in constructor
+    passwordHash: '', // Will be set during initialization
     wechatConfig: {
-      appId: '',
-      appSecret: '',
+      appId: process.env.WECHAT_APP_ID || '',
+      appSecret: process.env.WECHAT_APP_SECRET || '',
     },
     preferences: {
       defaultPublishTime: '09:00',
@@ -28,116 +24,40 @@ class AuthServiceImpl implements AuthService {
   };
 
   constructor() {
-    this.redisClient = createClient({ url: config.redisUrl });
-    this.redisClient.on('error', (err) => {
-      logger.warn('Redis Client Error, falling back to in-memory storage:', err);
-      this.useRedis = false;
-    });
     this.initializeDefaultUser();
   }
 
-  private async initializeDefaultUser() {
-    try {
-      // Try to connect to Redis
-      if (!this.useRedis) {
-        try {
-          await this.redisClient.connect();
-          this.useRedis = true;
-          logger.info('Connected to Redis');
-        } catch (error) {
-          logger.warn('Redis connection failed, using in-memory storage:', error);
-          this.useRedis = false;
-        }
-      }
-      
-      // Create default password hash for development
-      const defaultPassword = process.env.DEFAULT_PASSWORD || 'admin123';
-      this.defaultUser.passwordHash = await bcrypt.hash(defaultPassword, 10);
-      
-      // Store default user
-      if (this.useRedis) {
-        await this.redisClient.set(
-          `user:${this.defaultUser.id}`,
-          JSON.stringify(this.defaultUser),
-          { EX: 86400 } // 24 hours
-        );
-      } else {
-        this.inMemoryStore.set(`user:${this.defaultUser.id}`, JSON.stringify(this.defaultUser));
-      }
-      
-      logger.info('Default user initialized');
-    } catch (error) {
-      logger.error('Failed to initialize default user:', error);
-    }
-  }
+  private initializeDefaultUser() {
+    logger.info('Initializing default user...');
 
-  private async getValue(key: string): Promise<string | null> {
-    if (this.useRedis) {
-      try {
-        return await this.redisClient.get(key);
-      } catch (error) {
-        logger.warn('Redis get failed, falling back to in-memory:', error);
-        this.useRedis = false;
-        return this.inMemoryStore.get(key) || null;
-      }
-    }
-    return this.inMemoryStore.get(key) || null;
-  }
+    // Create default password hash for development
+    const defaultPassword = process.env.DEFAULT_PASSWORD || 'admin123';
+    logger.info(`Creating default user with password length: ${defaultPassword.length}`);
 
-  private async setValue(key: string, value: string, ttl?: number): Promise<void> {
-    if (this.useRedis) {
-      try {
-        if (ttl) {
-          await this.redisClient.set(key, value, { EX: ttl });
-        } else {
-          await this.redisClient.set(key, value);
-        }
-        return;
-      } catch (error) {
-        logger.warn('Redis set failed, falling back to in-memory:', error);
-        this.useRedis = false;
-      }
-    }
-    this.inMemoryStore.set(key, value);
-  }
-
-  private async deleteValue(key: string): Promise<void> {
-    if (this.useRedis) {
-      try {
-        await this.redisClient.del(key);
-        return;
-      } catch (error) {
-        logger.warn('Redis delete failed, falling back to in-memory:', error);
-        this.useRedis = false;
-      }
-    }
-    this.inMemoryStore.delete(key);
+    bcrypt.hash(defaultPassword, 10).then(hash => {
+      this.defaultUser.passwordHash = hash;
+      logger.info('Default user initialized with password hash');
+    }).catch(error => {
+      logger.error('Failed to hash default password:', error);
+    });
   }
 
   async validatePassword(password: string): Promise<boolean> {
     try {
       logger.info(`Attempting to validate password for user: ${this.defaultUser.id}`);
-      
-      const userStr = await this.getValue(`user:${this.defaultUser.id}`);
-      if (!userStr) {
-        logger.error('User not found in storage');
-        throw createError('User not found', 404);
-      }
 
-      logger.info('User found in storage, comparing password');
-      const user: User = JSON.parse(userStr);
-      const isValid = await bcrypt.compare(password, user.passwordHash);
-      
+      // DEBUG LOGGING
+      logger.info(`Input password length: ${password.length}`);
+      logger.info(`Stored hash length: ${this.defaultUser.passwordHash.length}`);
+      logger.info(`Stored hash prefix: ${this.defaultUser.passwordHash.substring(0, 10)}...`);
+
+      const isValid = await bcrypt.compare(password, this.defaultUser.passwordHash);
+
       logger.info(`Password validation result: ${isValid}`);
-      
+
       if (isValid) {
         // Update last login time
-        user.lastLoginAt = new Date();
-        await this.setValue(
-          `user:${user.id}`,
-          JSON.stringify(user),
-          86400
-        );
+        this.defaultUser.lastLoginAt = new Date();
       }
 
       return isValid;
@@ -155,9 +75,6 @@ class AuthServiceImpl implements AuthService {
         { expiresIn: '24h' }
       );
 
-      // Store session
-      await this.setValue(`session:${sessionId}`, userId, 86400);
-
       logger.info(`Session created for user: ${userId}`);
       return sessionId;
     } catch (error) {
@@ -170,20 +87,18 @@ class AuthServiceImpl implements AuthService {
     try {
       // Verify JWT token
       jwt.verify(sessionId, config.jwtSecret);
-      
-      // Check if session exists
-      const userId = await this.getValue(`session:${sessionId}`);
-      return userId !== null;
+      return true;
     } catch (error) {
       logger.warn('Session validation failed:', error);
       return false;
     }
   }
 
-  async destroySession(sessionId: string): Promise<void> {
+  async destroySession(_sessionId: string): Promise<void> {
     try {
-      await this.deleteValue(`session:${sessionId}`);
-      logger.info('Session destroyed');
+      // With stateless auth, we don't need to store sessions
+      // Simply rely on JWT expiration for session invalidation
+      logger.info('Session destroyed (stateless - relying on JWT expiration)');
     } catch (error) {
       logger.error('Session destruction error:', error);
       throw createError('Failed to destroy session', 500);
@@ -192,11 +107,13 @@ class AuthServiceImpl implements AuthService {
 
   async getUserById(userId: string): Promise<User | null> {
     try {
-      const userStr = await this.getValue(`user:${userId}`);
-      if (!userStr) {
-        return null;
+      // For simplicity, return the default user if ID matches
+      if (userId === this.defaultUser.id) {
+        return {
+          ...this.defaultUser
+        };
       }
-      return JSON.parse(userStr);
+      return null;
     } catch (error) {
       logger.error('Get user error:', error);
       return null;
@@ -205,11 +122,9 @@ class AuthServiceImpl implements AuthService {
 
   async getUserFromSession(sessionId: string): Promise<User | null> {
     try {
-      const userId = await this.getValue(`session:${sessionId}`);
-      if (!userId) {
-        return null;
-      }
-      return this.getUserById(userId);
+      // Verify JWT token to extract userId
+      const decoded = jwt.verify(sessionId, config.jwtSecret) as { userId: string };
+      return this.getUserById(decoded.userId);
     } catch (error) {
       logger.error('Get user from session error:', error);
       return null;

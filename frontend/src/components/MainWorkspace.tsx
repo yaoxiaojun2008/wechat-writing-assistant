@@ -1,3 +1,5 @@
+// API base URL from environment variable or default to localhost
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
 import React, { useState, useCallback } from 'react';
 import {
   Container,
@@ -27,6 +29,7 @@ import DraftManager from './DraftManager';
 import { useVoiceRecording } from '../hooks/useVoiceRecording';
 import { useAIEditing } from '../hooks/useAIEditing';
 import { useWeChat } from '../hooks/useWeChat';
+
 
 export function MainWorkspace() {
   const { user, logout } = useAuth();
@@ -65,6 +68,9 @@ export function MainWorkspace() {
   // General state
   const [isProcessing, setIsProcessing] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+
+  // State for temporarily stored images
+  const [tempImages, setTempImages] = useState<File[]>([]);
 
   const handleMenu = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -142,33 +148,6 @@ export function MainWorkspace() {
     }
   }, [aiEditing]);
 
-  // AI editing handler - now uses real AI service
-  const handleAIEdit = useCallback(async (text: string) => {
-    if (!text.trim()) return;
-    
-    setEditingError(null);
-    
-    try {
-      const result = await aiEditing.editContent(text, {
-        level: user?.preferences.aiEditingLevel || 'moderate',
-        preserveStyle: true,
-        correctGrammar: true,
-        reorganizeStructure: false,
-      });
-      
-      if (result) {
-        setEditedContent(result.editedText);
-        
-        // Add to history
-        setEditHistory(prev => [...prev, result.editedText]);
-        setHistoryIndex(prev => prev + 1);
-      }
-    } catch (error) {
-      setEditingError('AI编辑处理失败，请重试');
-      console.error('AI editing failed:', error);
-    }
-  }, [aiEditing, user?.preferences.aiEditingLevel]);
-
   // Handle AI edit from EditingPanel
   const handleAIEditFromPanel = useCallback((editedText: string) => {
     setEditedContent(editedText);
@@ -199,6 +178,19 @@ export function MainWorkspace() {
     }
   }, [historyIndex, editHistory]);
 
+  // Handle image selection for temporary storage
+  const handleSelectImages = useCallback((files: FileList) => {
+    const newFiles = Array.from(files);
+    setTempImages(prev => [...prev, ...newFiles]);
+    console.log(`Selected ${newFiles.length} images, total: ${tempImages.length + newFiles.length}`);
+  }, [tempImages.length]);
+
+  // Clear temporarily stored images
+  const handleClearTempImages = useCallback(() => {
+    setTempImages([]);
+  }, []);
+
+  // Submit with images
   const handleSubmitToDraft = useCallback(async () => {
     if (!editedContent.trim()) return;
     
@@ -208,7 +200,7 @@ export function MainWorkspace() {
     setSubmitDialogOpen(true);
   }, [editedContent]);
 
-  // Handle actual submission to WeChat
+  // Handle actual submission to WeChat with images
   const handleConfirmSubmit = useCallback(async () => {
     if (!editedContent.trim() || !draftTitle.trim()) return;
     
@@ -216,24 +208,58 @@ export function MainWorkspace() {
     setEditingError(null);
     
     try {
-      const result = await wechat.saveToDraft(draftTitle, editedContent);
-      if (result) {
-        setSuccessMessage('草稿已成功提交到微信公众号！');
-        setSubmitDialogOpen(false);
-        setDraftTitle('');
+      if (tempImages.length > 0) {
+        // Prepare form data with content and images
+        const formData = new FormData();
+        formData.append('title', draftTitle);
+        formData.append('content', editedContent);
         
-        // Optionally clear the content after successful submission
-        // setEditedContent('');
-        // setEditHistory([]);
-        // setHistoryIndex(-1);
+        // Add each image file to form data
+        for (let i = 0; i < tempImages.length; i++) {
+          formData.append('images', tempImages[i]);
+        }
+        
+        // Send to backend API using the environment-defined API_BASE_URL
+        const response = await fetch(`${API_BASE_URL}/api/wechat/drafts-with-images`, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('sessionId')}`,
+          },
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error?.message || `HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          setSuccessMessage('草稿已成功提交到微信公众号！');
+          setSubmitDialogOpen(false);
+          setDraftTitle('');
+          // Clear temporary images after successful submission
+          setTempImages([]);
+        } else {
+          throw new Error(result.error?.message || 'Failed to submit draft with images');
+        }
+      } else {
+        // Submit without images using the original method
+        const result = await wechat.saveToDraft(draftTitle, editedContent);
+        if (result) {
+          setSuccessMessage('草稿已成功提交到微信公众号！');
+          setSubmitDialogOpen(false);
+          setDraftTitle('');
+        }
       }
     } catch (error) {
-      setEditingError('提交草稿失败，请重试');
+      setEditingError(`提交草稿失败: ${(error as Error).message || '未知错误'}`);
       console.error('Draft submission failed:', error);
     } finally {
       setIsSubmitting(false);
     }
-  }, [editedContent, draftTitle, wechat]);
+  }, [editedContent, draftTitle, tempImages, wechat]);
 
   // Toolbar handlers
   const handleRefresh = useCallback(() => {
@@ -347,11 +373,14 @@ export function MainWorkspace() {
               error={editingError}
               onContentChange={handleContentChange}
               onSubmitToDraft={handleSubmitToDraft}
+              onImageUploadAndSubmit={handleSelectImages} // Changed to store images temporarily
               onUndo={handleUndo}
               onRedo={handleRedo}
               onAIEdit={handleAIEditFromPanel}
               userId={user?.id}
               autoSaveInterval={5000}
+              tempImages={tempImages} // Pass temp images to EditingPanel
+              onClearTempImages={handleClearTempImages} // Pass clear function to EditingPanel
             />
           </Grid>
         </Grid>
@@ -407,6 +436,20 @@ export function MainWorkspace() {
               disabled={isSubmitting}
               autoFocus
             />
+            {tempImages.length > 0 && (
+              <Box mt={2}>
+                <Typography variant="body2" color="text.secondary">
+                  即将上传 {tempImages.length} 张图片到微信素材库
+                </Typography>
+                <Box mt={1}>
+                  {tempImages.map((file, index) => (
+                    <Typography key={index} variant="caption" color="text.secondary" display="block">
+                      {file.name} ({(file.size / 1024).toFixed(1)} KB)
+                    </Typography>
+                  ))}
+                </Box>
+              </Box>
+            )}
             <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
               上传进度: {wechat.uploadProgress}%
             </Typography>

@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react';
-import { wechatService, ProgressCallback } from '../services/wechatService';
-import { Draft, PublishOptions } from '../types/index';
+import { useCallback, useState } from 'react';
+import { wechatService } from '../services/wechatService';
+import { Draft, PublishOptions } from '../types';
 
 interface UseWeChatReturn {
   // State
@@ -19,6 +19,15 @@ interface UseWeChatReturn {
   scheduleDraft: (draftId: string, scheduledTime: Date, options: PublishOptions) => Promise<string | null>;
   checkServiceStatus: () => Promise<void>;
   clearError: () => void;
+  uploadPermanentImage: (imagePath: string) => Promise<string>;
+  uploadContentImage: (imagePath: string) => Promise<string>;
+  createDraftWithImages: (
+    title: string, 
+    content: string, 
+    thumbMediaId: string, 
+    author?: string, 
+    digest?: string
+  ) => Promise<Draft | null>;
 }
 
 export const useWeChat = (): UseWeChatReturn => {
@@ -50,6 +59,78 @@ export const useWeChat = (): UseWeChatReturn => {
   }, []);
 
   /**
+   * Upload image to permanent media library
+   */
+  const uploadPermanentImage = useCallback(async (imagePath: string): Promise<string> => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const mediaId = await wechatService.uploadPermanentImage(imagePath);
+      return mediaId;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to upload permanent image';
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  /**
+   * Upload image for use in content
+   */
+  const uploadContentImage = useCallback(async (imagePath: string): Promise<string> => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const imageUrl = await wechatService.uploadContentImage(imagePath);
+      return imageUrl;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to upload content image';
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  /**
+   * Create draft with images
+   */
+  const createDraftWithImages = useCallback(async (
+    title: string,
+    content: string,
+    thumbMediaId: string,
+    author?: string,
+    digest?: string
+  ): Promise<Draft | null> => {
+    setIsLoading(true);
+    setError(null);
+    setUploadProgress(0);
+
+    try {
+      // This would be implemented similar to saveToDraft but with images
+      const result = await wechatService.createDraftWithImages(title, content, thumbMediaId, author, digest);
+      
+      // Add new draft to the list
+      setDrafts(prev => [result.draft, ...prev]);
+      setUploadProgress(100);
+      return result.draft;
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create draft with images';
+      setError(errorMessage);
+      setUploadProgress(0);
+      return null;
+
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  /**
    * Save content as draft to WeChat
    */
   const saveToDraft = useCallback(async (title: string, content: string): Promise<Draft | null> => {
@@ -58,11 +139,7 @@ export const useWeChat = (): UseWeChatReturn => {
     setUploadProgress(0);
 
     try {
-      const onProgress: ProgressCallback = (progress) => {
-        setUploadProgress(progress);
-      };
-
-      const result = await wechatService.saveToDraft(title, content, onProgress);
+      const result = await wechatService.saveToDraft(title, content);
       
       // Add new draft to the list
       setDrafts(prev => [result.draft, ...prev]);
@@ -190,6 +267,9 @@ export const useWeChat = (): UseWeChatReturn => {
     scheduleDraft,
     checkServiceStatus,
     clearError,
+    uploadPermanentImage,
+    uploadContentImage,
+    createDraftWithImages,
   };
 };
 

@@ -241,6 +241,105 @@ export class WeChatService {
       return false;
     }
   }
+
+  /**
+   * Upload image to permanent media library
+   */
+  async uploadPermanentImage(imagePath: string): Promise<string> {
+    try {
+      const response: AxiosResponse<ApiResponse<{ mediaId: string }>> = 
+        await axios.post(
+          `${this.baseURL}/images/permanent`,
+          { imagePath },
+          {
+            headers: this.getAuthHeaders(),
+            timeout: 30000,
+          }
+        );
+
+      if (!response.data.success || !response.data.data) {
+        throw new Error(response.data.error?.message || 'Failed to upload permanent image');
+      }
+
+      return response.data.data.mediaId;
+
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const message = error.response?.data?.error?.message || error.message;
+        throw new Error(`Failed to upload permanent image: ${message}`);
+      }
+      
+      throw new Error('Network error while uploading permanent image');
+    }
+  }
+
+  /**
+   * Upload image for use in content
+   */
+  async uploadContentImage(imagePath: string): Promise<string> {
+    try {
+      const response: AxiosResponse<ApiResponse<{ imageUrl: string }>> = 
+        await axios.post(
+          `${this.baseURL}/images/content`,
+          { imagePath },
+          {
+            headers: this.getAuthHeaders(),
+            timeout: 30000,
+          }
+        );
+
+      if (!response.data.success || !response.data.data) {
+        throw new Error(response.data.error?.message || 'Failed to upload content image');
+      }
+
+      return response.data.data.imageUrl;
+
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const message = error.response?.data?.error?.message || error.message;
+        throw new Error(`Failed to upload content image: ${message}`);
+      }
+      
+      throw new Error('Network error while uploading content image');
+    }
+  }
+
+  /**
+   * Create draft with images
+   */
+  async createDraftWithImages(
+    title: string, 
+    content: string, 
+    thumbMediaId: string, 
+    author?: string, 
+    digest?: string
+  ): Promise<{ draft: Draft; wechatDraftId: string }> {
+    try {
+      const response: AxiosResponse<ApiResponse<{ draft: Draft; wechatDraftId: string }>> = 
+        await axios.post(
+          `${this.baseURL}/drafts-with-images`,
+          { title, content, thumbMediaId, author, digest },
+          {
+            headers: this.getAuthHeaders(),
+            timeout: 30000,
+          }
+        );
+
+      if (!response.data.success || !response.data.data) {
+        throw new Error(response.data.error?.message || 'Failed to create draft with images');
+      }
+
+      return response.data.data;
+
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const message = error.response?.data?.error?.message || error.message;
+        throw new Error(`Failed to create draft with images: ${message}`);
+      }
+      
+      throw new Error('Network error while creating draft with images');
+    }
+  }
 }
 
 // Create singleton instance

@@ -205,6 +205,8 @@ export class VoiceRecordingService {
 export class WebSpeechService {
   private recognition: SpeechRecognition | null = null;
   private isListening = false;
+  private finalTranscript = '';
+  interimTranscript = '';  // 移除 private 修饰符，因为这个变量在类中被使用了
 
   constructor() {
     // Check for Web Speech API support
@@ -239,6 +241,47 @@ export class WebSpeechService {
 
   isSupported(): boolean {
     return this.recognition !== null;
+  }
+
+  /**
+   * Start speech recognition
+   */
+  startRecognition(): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      if (!this.recognition) {
+        reject(new Error('Speech recognition not initialized'));
+        return;
+      }
+
+      // Reset interim transcript
+      this.interimTranscript = '';
+
+      // Set up recognition events
+      this.recognition.onresult = (event: SpeechRecognitionEvent) => {
+        let interimTranscript = '';
+        for (let i = 0; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            this.finalTranscript += transcript;
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+        this.interimTranscript = interimTranscript;
+      };
+
+      this.recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        console.error('Speech recognition error', event.error);
+        reject(new Error(`Speech recognition error: ${event.error}`));
+      };
+
+      this.recognition.onend = () => {
+        resolve(this.finalTranscript);
+      };
+
+      // Start recognition
+      this.recognition.start();
+    });
   }
 
   async startListening(): Promise<string> {
@@ -433,21 +476,17 @@ export class WebSpeechService {
           console.log('Microphone test: Speech recognition started');
         };
 
-        this.recognition.onresult = (event) => {
-          if (!testCompleted) {
-            testCompleted = true;
-            clearTimeout(testTimeout);
-            this.recognition?.stop();
-            
-            // Clean up the stream
-            stream.getTracks().forEach(track => track.stop());
-            
-            resolve({
-              hasPermission: true,
-              canRecord: true,
-              message: '麦克风测试成功！检测到语音输入，系统工作正常。'
-            });
+        this.recognition.onresult = (_event: SpeechRecognitionEvent) => {
+          let _interimTranscript = '';  // 使用下划线表示这是有意未使用的变量
+          for (let i = 0; i < _event.results.length; i++) {
+            const transcript = _event.results[i][0].transcript;
+            if (_event.results[i].isFinal) {
+              this.finalTranscript += transcript;
+            } else {
+              _interimTranscript += transcript;
+            }
           }
+          this.interimTranscript = _interimTranscript;
         };
 
         this.recognition.onerror = (event) => {

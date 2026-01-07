@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Box,
   Paper,
@@ -8,9 +8,7 @@ import {
   ListItemText,
   ListItemSecondaryAction,
   IconButton,
-  Chip,
   Tooltip,
-  Collapse,
   Button,
   Dialog,
   DialogTitle,
@@ -20,14 +18,14 @@ import {
 } from '@mui/material';
 import {
   History,
-  Restore,
-  ExpandMore,
   ExpandLess,
-  Person,
-  SmartToy,
-  Visibility,
-  Delete,
+  ExpandMore,
   Edit,
+  Delete,
+  Restore,
+  SmartToy,
+  Person,
+  Visibility,
 } from '@mui/icons-material';
 import { EditOperation } from '../types/index.js';
 
@@ -112,21 +110,39 @@ export function VersionHistory({
 
   const getSourceChip = (source: 'user' | 'ai') => {
     return source === 'ai' ? (
-      <Chip
-        icon={<SmartToy />}
-        label="AI"
-        size="small"
-        color="primary"
-        variant="outlined"
-      />
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.5,
+          px: 1,
+          py: 0.25,
+          border: '1px solid',
+          borderColor: 'primary.main',
+          borderRadius: 1,
+          fontSize: '0.75rem',
+        }}
+      >
+        <SmartToy sx={{ fontSize: '0.875rem' }} />
+        AI
+      </Box>
     ) : (
-      <Chip
-        icon={<Person />}
-        label="用户"
-        size="small"
-        color="default"
-        variant="outlined"
-      />
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.5,
+          px: 1,
+          py: 0.25,
+          border: '1px solid',
+          borderColor: 'text.secondary',
+          borderRadius: 1,
+          fontSize: '0.75rem',
+        }}
+      >
+        <Person sx={{ fontSize: '0.875rem' }} />
+        用户
+      </Box>
     );
   };
 
@@ -196,11 +212,18 @@ export function VersionHistory({
                     </Typography>
                     {getSourceChip(operation.source)}
                     {isCurrent && (
-                      <Chip
-                        label="当前版本"
-                        size="small"
-                        color="primary"
-                      />
+                      <Box
+                        sx={{
+                          px: 1,
+                          py: 0.25,
+                          backgroundColor: 'primary.main',
+                          color: 'primary.contrastText',
+                          borderRadius: 1,
+                          fontSize: '0.75rem',
+                        }}
+                      >
+                        当前版本
+                      </Box>
                     )}
                   </Box>
                 }
@@ -270,7 +293,10 @@ export function VersionHistory({
           版本预览
           {previewDialog.operation && (
             <Typography variant="subtitle2" color="text.secondary">
-              {formatTimestamp(previewDialog.operation.timestamp)} • {getSourceChip(previewDialog.operation.source)}
+              {formatTimestamp(previewDialog.operation.timestamp)} • 
+              <Box component="span" sx={{ ml: 1 }}>
+                {getSourceChip(previewDialog.operation.source)}
+              </Box>
             </Typography>
           )}
         </DialogTitle>

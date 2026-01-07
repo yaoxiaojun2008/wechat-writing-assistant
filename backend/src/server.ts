@@ -10,7 +10,7 @@ import { rateLimiter } from './middleware/rateLimiter.js';
 import authRoutes from './routes/authRoutes.js';
 import { voiceRoutes } from './routes/voiceRoutes.js';
 import aiEditingRoutes from './routes/aiEditingRoutes.js';
-import contentEditingRoutes from './routes/contentEditingRoutes.js';
+import { contentEditingRoutes } from './routes/contentEditingRoutes.js';
 import wechatRoutes from './routes/wechatRoutes.js';
 
 // Load environment variables
@@ -70,6 +70,8 @@ if (process.env.NODE_ENV !== 'test') {
   server.listen(PORT, () => {
     logger.info(`Server running on port ${PORT}`);
     logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    logger.info(`AI Provider: ${process.env.AI_PROVIDER || 'openai'}`);
+    logger.info(`Default AI Model: ${process.env.DEFAULT_AI_MODEL || 'gpt-3.5-turbo'}`);
   });
 }
 

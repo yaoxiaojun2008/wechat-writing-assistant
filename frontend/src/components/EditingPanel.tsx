@@ -34,6 +34,7 @@ import {
   History,
   CheckCircle,
   RadioButtonUnchecked,
+  Upload,
 } from '@mui/icons-material';
 import { useAIEditing } from '../hooks/useAIEditing.js';
 import { useContentEditor } from '../hooks/useContentEditor.js';
@@ -50,12 +51,15 @@ interface EditingPanelProps {
   error: string | null;
   onContentChange: (content: string) => void;
   onSubmitToDraft: () => Promise<void>;
+  onImageUploadAndSubmit: (files: FileList) => void; // Changed to store images temporarily
   onUndo?: () => void;
   onRedo?: () => void;
   onManualSave?: () => void;
   onAIEdit?: (editedText: string) => void;
   userId?: string;
   autoSaveInterval?: number;
+  tempImages?: File[]; // Added prop for displaying temp images
+  onClearTempImages?: () => void; // Added prop for clearing temp images
 }
 
 export function EditingPanel({
@@ -67,12 +71,15 @@ export function EditingPanel({
   error,
   onContentChange,
   onSubmitToDraft,
+  onImageUploadAndSubmit, // Changed to store images temporarily
   onUndo,
   onRedo,
   onManualSave,
   onAIEdit,
   userId = 'default-user',
   autoSaveInterval = 5000,
+  tempImages = [], // Added prop for displaying temp images
+  onClearTempImages, // Added prop for clearing temp images
 }: EditingPanelProps) {
   const textFieldRef = useRef<HTMLTextAreaElement>(null);
   const [aiMenuAnchor, setAiMenuAnchor] = useState<null | HTMLElement>(null);
@@ -86,19 +93,24 @@ export function EditingPanel({
     reorganizeStructure: false,
   });
 
+  // State for image upload dialog
+  const [imageUploadDialogOpen, setImageUploadDialogOpen] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
+  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
+
   const aiEditing = useAIEditing();
 
   // Initialize content editor with enhanced functionality
   const contentEditor = useContentEditor({
     autoSaveInterval,
     maxHistorySize: 100,
-    onAutoSave: async (content: string) => {
+    onAutoSave: async (_content: string) => {
       if (onManualSave) {
         await onManualSave();
       }
     },
-    onContentChange: (content: string, hasChanges: boolean) => {
-      onContentChange(content);
+    onContentChange: (_content: string, _hasChanges: boolean) => {
+      onContentChange(_content);
     },
     onSessionUpdate: (session) => {
       console.log('Editing session updated:', session.id);
@@ -146,6 +158,36 @@ export function EditingPanel({
       contentEditor.markAsCompleted();
     } catch (error) {
       // Error handling is managed by parent component
+    }
+  };
+
+  // Handle image upload and submit
+  const handleImageUploadAndSubmit = async () => {
+    setImageUploadDialogOpen(true);
+  };
+
+  const handleImageUploadSubmit = async () => {
+    if (!selectedFiles) {
+      setImageUploadError('请选择要上传的图片文件');
+      return;
+    }
+
+    try {
+      // 调用父组件的函数来暂存图片
+      onImageUploadAndSubmit(selectedFiles);
+      setImageUploadDialogOpen(false);
+      setSelectedFiles(null);
+      setImageUploadError(null);
+    } catch (err) {
+      setImageUploadError('暂存图片失败，请重试');
+      console.error('Image selection failed:', err);
+    }
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files.length > 0) {
+      setSelectedFiles(event.target.files);
+      setImageUploadError(null);
     }
   };
 
@@ -394,17 +436,124 @@ export function EditingPanel({
             />
           </Box>
           
-          <Button
-            variant="contained"
-            startIcon={isSubmitting ? <CircularProgress size={16} /> : <CloudUpload />}
-            onClick={handleSubmit}
-            disabled={!contentEditor.content.trim() || isAIProcessing || isSubmitting || aiEditing.isProcessing}
-            sx={{ minWidth: 140 }}
-          >
-            {isSubmitting ? '提交中...' : '提交到微信草稿箱'}
-          </Button>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
+            {/* Display temporarily stored images */}
+            {(tempImages && tempImages.length > 0) && (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1, maxWidth: 300 }}>
+                {tempImages.map((file, index) => (
+                  <Chip
+                    key={index}
+                    label={`${file.name} (${(file.size / 1024).toFixed(1)}KB)`}
+                    size="small"
+                    onDelete={onClearTempImages ? 
+                      () => {
+                        // 为简化，我们只提供清空全部功能
+                        onClearTempImages();
+                      } 
+                      : undefined}
+                    sx={{ maxWidth: '100%' }}
+                  />
+                ))}
+                {onClearTempImages && (
+                  <Button 
+                    size="small" 
+                    onClick={onClearTempImages}
+                    color="secondary"
+                    sx={{ height: '32px' }}
+                  >
+                    清空全部
+                  </Button>
+                )}
+              </Box>
+            )}
+            
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              {/* Upload Image Button */}
+              <Button
+                variant="outlined"
+                startIcon={isSubmitting ? <CircularProgress size={16} /> : <Upload />}
+                onClick={handleImageUploadAndSubmit}
+                disabled={isAIProcessing || isSubmitting || aiEditing.isProcessing}
+                sx={{ minWidth: 140 }}
+              >
+                {isSubmitting ? '处理中...' : '上传图片'}
+              </Button>
+              
+              <Button
+                variant="contained"
+                startIcon={isSubmitting ? <CircularProgress size={16} /> : <CloudUpload />}
+                onClick={handleSubmit}
+                disabled={!contentEditor.content.trim() || isAIProcessing || isSubmitting || aiEditing.isProcessing}
+                sx={{ minWidth: 140 }}
+              >
+                {isSubmitting ? '提交中...' : '提交到微信草稿箱'}
+              </Button>
+            </Box>
+          </Box>
         </Box>
       </Box>
+
+      {/* Image Upload Dialog */}
+      <Dialog
+        open={imageUploadDialogOpen}
+        onClose={() => !isSubmitting && setImageUploadDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>上传图片到永久素材库</DialogTitle>
+        <DialogContent>
+          <Box mt={2}>
+            <input
+              accept="image/*"
+              multiple
+              type="file"
+              id="upload-image"
+              style={{ display: 'none' }}
+              onChange={handleFileChange}
+            />
+            <label htmlFor="upload-image">
+              <Button
+                variant="outlined"
+                component="span"
+                startIcon={<Upload />}
+                fullWidth
+                sx={{ mt: 1 }}
+              >
+                选择图片文件
+              </Button>
+            </label>
+            {selectedFiles && selectedFiles.length > 0 && (
+              <Box mt={2}>
+                <Typography variant="body2" color="text.secondary">
+                  已选择 {selectedFiles.length} 个文件:
+                </Typography>
+                <ul style={{ margin: 0, padding: '10px 0 0 20px' }}>
+                  {Array.from(selectedFiles).map((file, index) => (
+                    <li key={index}>{file.name}</li>
+                  ))}
+                </ul>
+              </Box>
+            )}
+            {imageUploadError && (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {imageUploadError}
+              </Alert>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setImageUploadDialogOpen(false)} disabled={isSubmitting}>
+            取消
+          </Button>
+          <Button
+            onClick={handleImageUploadSubmit}
+            variant="contained"
+            disabled={isSubmitting || !selectedFiles || selectedFiles.length === 0}
+          >
+            {isSubmitting ? '处理中...' : '上传并提交'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* AI Editing Menu */}
       <Menu

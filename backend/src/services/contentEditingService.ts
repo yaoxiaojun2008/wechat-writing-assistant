@@ -1,12 +1,23 @@
-import { EditingSession, EditOperation, AISuggestion } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
-import { createError } from '../middleware/errorHandler.js';
+import { 
+  EditingSession, 
+  EditOperation 
+} from '../types/index.js';
 
-interface ContentEditingServiceInterface {
-  createEditingSession(userId: string, originalText: string): Promise<EditingSession>;
-  updateEditingSession(sessionId: string, updates: Partial<EditingSession>): Promise<EditingSession>;
-  getEditingSession(sessionId: string): Promise<EditingSession | null>;
+// Helper function to create error objects
+function createError(message: string, statusCode: number) {
+  const error = new Error(message);
+  // @ts-ignore - adding custom property to Error
+  error.statusCode = statusCode;
+  return error;
+}
+
+// Define the interface for the service
+interface ContentEditingService {
+  createEditingSession(content: string, title: string): Promise<EditingSession>;
+  getSession(sessionId: string): Promise<EditingSession | null>;
+  updateSession(sessionId: string, updates: Partial<{ content: string, title: string }>): Promise<EditingSession | null>;
   deleteEditingSession(sessionId: string): Promise<boolean>;
   addEditOperation(sessionId: string, operation: Omit<EditOperation, 'id' | 'timestamp'>): Promise<EditOperation>;
   getEditHistory(sessionId: string): Promise<EditOperation[]>;
@@ -15,19 +26,25 @@ interface ContentEditingServiceInterface {
   restoreVersion(sessionId: string, operationId: string): Promise<string>;
 }
 
-class ContentEditingServiceImpl implements ContentEditingServiceInterface {
+export class ContentEditingServiceImpl implements ContentEditingService {
   // In-memory storage for demo purposes
   // In production, this would use a database like Redis or PostgreSQL
   private sessions: Map<string, EditingSession> = new Map();
-  private operations: Map<string, EditOperation[]> = new Map();
+  private operations: Map<string, EditOperation[]> = new Map(); // Add the missing operations property
+  private storage: any;
 
-  async createEditingSession(userId: string, originalText: string): Promise<EditingSession> {
+  constructor(storageProvider: any) {
+    this.storage = storageProvider;
+  }
+
+  async createEditingSession(content: string): Promise<EditingSession> {
     try {
+      const sessionId = uuidv4();
       const session: EditingSession = {
-        id: uuidv4(),
-        userId,
-        originalText,
-        editedText: originalText,
+        id: sessionId,
+        userId: 'default_user',
+        originalText: content,
+        editedText: content,
         editHistory: [],
         aiSuggestions: [],
         status: 'editing',
@@ -35,10 +52,18 @@ class ContentEditingServiceImpl implements ContentEditingServiceInterface {
         updatedAt: new Date(),
       };
 
-      this.sessions.set(session.id, session);
-      this.operations.set(session.id, []);
+      // Add to in-memory cache
+      this.sessions.set(sessionId, session);
 
-      logger.info(`Created editing session: ${session.id} for user: ${userId}`);
+      // Also save to storage if available
+      if (this.storage) {
+        await this.storage.set(sessionId, JSON.stringify(session));
+      }
+
+      // Initialize operations list
+      this.operations.set(sessionId, []);
+
+      logger.info(`Created new editing session: ${sessionId}`);
       return session;
     } catch (error) {
       logger.error('Failed to create editing session:', error);
@@ -46,38 +71,28 @@ class ContentEditingServiceImpl implements ContentEditingServiceInterface {
     }
   }
 
-  async updateEditingSession(sessionId: string, updates: Partial<EditingSession>): Promise<EditingSession> {
+
+
+  async getSession(sessionId: string): Promise<EditingSession | null> {
     try {
-      const session = this.sessions.get(sessionId);
-      if (!session) {
-        throw createError('编辑会话不存在', 404);
+      // Check if session exists in memory
+      if (this.sessions.has(sessionId)) {
+        return this.sessions.get(sessionId)!;
       }
 
-      const updatedSession: EditingSession = {
-        ...session,
-        ...updates,
-        updatedAt: new Date(),
-      };
-
-      this.sessions.set(sessionId, updatedSession);
-
-      logger.info(`Updated editing session: ${sessionId}`);
-      return updatedSession;
-    } catch (error) {
-      logger.error('Failed to update editing session:', error);
-      if (error instanceof Error && error.message.includes('编辑会话不存在')) {
-        throw error;
+      // If not in memory, try to get from storage (Redis or memory fallback)
+      const sessionData = await this.storage?.get(sessionId) || null;
+      if (sessionData) {
+        // Parse and return the session data
+        const session = JSON.parse(sessionData) as EditingSession;
+        // Add to in-memory cache for faster access
+        this.sessions.set(sessionId, session);
+        return session;
       }
-      throw createError('更新编辑会话失败', 500);
-    }
-  }
 
-  async getEditingSession(sessionId: string): Promise<EditingSession | null> {
-    try {
-      const session = this.sessions.get(sessionId);
-      return session || null;
+      return null;
     } catch (error) {
-      logger.error('Failed to get editing session:', error);
+      logger.error(`Error getting session ${sessionId}:`, error);
       return null;
     }
   }
@@ -170,20 +185,11 @@ class ContentEditingServiceImpl implements ContentEditingServiceInterface {
 
   async saveContent(sessionId: string, content: string): Promise<void> {
     try {
-      const session = this.sessions.get(sessionId);
-      if (!session) {
+      // Use updateSession which handles both memory and storage
+      const result = await this.updateSession(sessionId, { content });
+      if (!result) {
         throw createError('编辑会话不存在', 404);
       }
-
-      const updatedSession = {
-        ...session,
-        editedText: content,
-        updatedAt: new Date(),
-      };
-
-      this.sessions.set(sessionId, updatedSession);
-
-      logger.info(`Saved content for session: ${sessionId}`);
     } catch (error) {
       logger.error('Failed to save content:', error);
       if (error instanceof Error && error.message.includes('编辑会话不存在')) {
@@ -195,7 +201,7 @@ class ContentEditingServiceImpl implements ContentEditingServiceInterface {
 
   async restoreVersion(sessionId: string, operationId: string): Promise<string> {
     try {
-      const session = this.sessions.get(sessionId);
+      const session = await this.getSession(sessionId);
       if (!session) {
         throw createError('编辑会话不存在', 404);
       }
@@ -227,13 +233,8 @@ class ContentEditingServiceImpl implements ContentEditingServiceInterface {
         }
       }
 
-      // Update session with restored content
-      const updatedSession = {
-        ...session,
-        editedText: restoredContent,
-        updatedAt: new Date(),
-      };
-      this.sessions.set(sessionId, updatedSession);
+      // Use updateSession to properly update both memory and storage
+      await this.updateSession(sessionId, { content: restoredContent });
 
       logger.info(`Restored version for session: ${sessionId} to operation: ${operationId}`);
       return restoredContent;
@@ -345,9 +346,44 @@ class ContentEditingServiceImpl implements ContentEditingServiceInterface {
 
     return autoSaveInterval;
   }
+
+  async updateSession(sessionId: string, updates: Partial<{ content: string }>): Promise<EditingSession | null> {
+    try {
+      // Get the current session
+      let session = this.sessions.get(sessionId);
+      
+      if (!session) {
+        // Try to get from storage
+        const sessionData = await this.storage?.get(sessionId) || null;
+        if (sessionData) {
+          session = JSON.parse(sessionData) as EditingSession;
+        } else {
+          return null; // Session doesn't exist
+        }
+      }
+
+      // Update the session with provided values
+      const updatedSession: EditingSession = {
+        ...session,
+        ...updates,
+        updatedAt: new Date(),
+      };
+
+      // Update in memory
+      this.sessions.set(sessionId, updatedSession);
+
+      // Update in storage if available
+      if (this.storage) {
+        await this.storage.set(sessionId, JSON.stringify(updatedSession));
+      }
+
+      return updatedSession;
+    } catch (error) {
+      logger.error(`Error updating session ${sessionId}:`, error);
+      return null;
+    }
+  }
 }
 
-export const contentEditingService = new ContentEditingServiceImpl();
-
-// Export service class for testing
-export { ContentEditingServiceImpl };
+// Export the service instance with null storage for now
+export const contentEditingService = new ContentEditingServiceImpl(null);

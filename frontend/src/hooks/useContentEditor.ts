@@ -255,7 +255,6 @@ export function useContentEditor(options: ContentEditorOptions = {}): ContentEdi
     if (state.currentHistoryIndex <= 0) return false;
 
     const newIndex = state.currentHistoryIndex - 1;
-    const targetOperation = state.editHistory[newIndex];
     
     setState(prev => {
       let newContent = prev.originalContent;

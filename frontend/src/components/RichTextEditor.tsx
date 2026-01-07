@@ -7,10 +7,7 @@ import {
   Menu,
   MenuItem,
   Typography,
-  Chip,
   Divider,
-  FormControlLabel,
-  Switch,
   Slider,
   Paper,
 } from '@mui/material';
@@ -22,12 +19,8 @@ import {
   FormatListNumbered,
   FormatQuote,
   FormatSize,
-  Undo,
-  Redo,
   FindReplace,
-  Spellcheck,
   TextFields,
-  History,
 } from '@mui/icons-material';
 
 export interface RichTextEditorProps {

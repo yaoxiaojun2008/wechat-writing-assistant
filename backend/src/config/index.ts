@@ -9,8 +9,8 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
 
-  // Database configuration
-  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
+  // Database configuration - removed Redis config as requested
+  // redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
 
   // Authentication
   jwtSecret: process.env.JWT_SECRET || 'default-jwt-secret',
@@ -24,7 +24,7 @@ export const config = {
 
   // AI LLM configuration
   ai: {
-    provider: process.env.AI_PROVIDER || 'openai', // 'openai' or 'gemini'
+    provider: process.env.AI_PROVIDER || 'deepseek', // Changed to 'deepseek' as default
     openai: {
       apiKey: process.env.OPENAI_API_KEY || '',
       model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
@@ -32,6 +32,11 @@ export const config = {
     gemini: {
       apiKey: process.env.GEMINI_API_KEY || '',
       model: process.env.GEMINI_MODEL || 'gemini-1.5-pro',
+    },
+    deepseek: {
+      apiKey: process.env.DEEPSEEK_API_KEY || '',
+      model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
+      baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
     },
   },
 
@@ -64,9 +69,16 @@ const requiredEnvVars = ['JWT_SECRET'];
 if (config.nodeEnv === 'production') {
   requiredEnvVars.push(
     'WECHAT_APP_ID',
-    'WECHAT_APP_SECRET',
-    'OPENAI_API_KEY'
+    'WECHAT_APP_SECRET'
   );
+  // Only require OpenAI key if using OpenAI as provider
+  if (config.ai.provider === 'openai') {
+    requiredEnvVars.push('OPENAI_API_KEY');
+  } else if (config.ai.provider === 'deepseek') {
+    requiredEnvVars.push('DEEPSEEK_API_KEY');
+  } else if (config.ai.provider === 'gemini') {
+    requiredEnvVars.push('GEMINI_API_KEY');
+  }
 }
 
 for (const envVar of requiredEnvVars) {

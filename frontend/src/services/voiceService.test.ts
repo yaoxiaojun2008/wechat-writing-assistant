@@ -2,31 +2,76 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { VoiceRecordingService, WebSpeechService } from './voiceService';
 
 // Mock MediaRecorder
-const mockMediaRecorder = {
+global.MediaRecorder = vi.fn().mockImplementation(() => ({
   start: vi.fn(),
   stop: vi.fn(),
-  ondataavailable: null,
-  onerror: null,
-  onstop: null,
+  pause: vi.fn(),
+  resume: vi.fn(),
+  requestData: vi.fn(),
+  stream: new MediaStream(),
+  mimeType: 'audio/webm',
   state: 'inactive',
-};
+  ondataavailable: vi.fn(),
+  onerror: vi.fn(),
+  onpause: vi.fn(),
+  onresume: vi.fn(),
+  onstart: vi.fn(),
+  onstop: vi.fn(),
+} as any)).mockImplementation((stream: MediaStream) => {
+  return {
+    start: vi.fn(),
+    stop: vi.fn(),
+    pause: vi.fn(),
+    resume: vi.fn(),
+    requestData: vi.fn(),
+    stream,
+    mimeType: 'audio/webm',
+    state: 'inactive',
+    ondataavailable: vi.fn(),
+    onerror: vi.fn(),
+    onpause: vi.fn(),
+    onresume: vi.fn(),
+    onstart: vi.fn(),
+    onstop: vi.fn(),
+  } as any;
+}).mockImplementation(() => {
+  return {
+    start: vi.fn(),
+    stop: vi.fn(),
+    pause: vi.fn(),
+    resume: vi.fn(),
+    requestData: vi.fn(),
+    stream: new MediaStream(),
+    mimeType: 'audio/webm',
+    state: 'inactive',
+    ondataavailable: vi.fn(),
+    onerror: vi.fn(),
+    onpause: vi.fn(),
+    onresume: vi.fn(),
+    onstart: vi.fn(),
+    onstop: vi.fn(),
+  } as any;
+}).mockImplementation(() => {
+  return {
+    start: vi.fn(),
+    stop: vi.fn(),
+    pause: vi.fn(),
+    resume: vi.fn(),
+    requestData: vi.fn(),
+    stream: new MediaStream(),
+    mimeType: 'audio/webm',
+    state: 'inactive',
+    ondataavailable: vi.fn(),
+    onerror: vi.fn(),
+    onpause: vi.fn(),
+    onresume: vi.fn(),
+    onstart: vi.fn(),
+    onstop: vi.fn(),
+  } as any;
+}) as any;
 
-const mockTrack = { stop: vi.fn() };
-const mockStream = {
-  getTracks: vi.fn(() => [mockTrack]),
-};
-
-// Mock navigator.mediaDevices
-Object.defineProperty(navigator, 'mediaDevices', {
-  writable: true,
-  value: {
-    getUserMedia: vi.fn(),
-  },
-});
-
-// Mock MediaRecorder constructor
-global.MediaRecorder = vi.fn(() => mockMediaRecorder) as any;
-global.MediaRecorder.isTypeSupported = vi.fn(() => true);
+// Add isTypeSupported method to mock
+(global.MediaRecorder as any).isTypeSupported = vi.fn().mockReturnValue(true);
 
 // Mock Blob constructor
 global.Blob = vi.fn(() => ({
@@ -48,6 +93,12 @@ describe('VoiceRecordingService', () => {
   });
 
   it('should start recording successfully', async () => {
+    // Create mock stream and track
+    const mockTrack = {
+      stop: vi.fn(),
+    } as any as MediaStreamTrack; // 强制转换类型以解决类型不匹配问题
+    const mockStream = { getTracks: () => [mockTrack] };
+    
     // Mock successful getUserMedia
     (navigator.mediaDevices.getUserMedia as any).mockResolvedValue(mockStream);
 
@@ -61,7 +112,14 @@ describe('VoiceRecordingService', () => {
         noiseSuppression: true,
       },
     });
-    expect(mockMediaRecorder.start).toHaveBeenCalledWith(1000);
+    
+    // Access the MediaRecorder instance from the service
+    // @ts-ignore - accessing private property for testing
+    const recorderInstance = voiceService['mediaRecorder'];
+    expect(recorderInstance).toBeDefined();
+    if (recorderInstance) {
+      expect(recorderInstance.start).toHaveBeenCalledWith(1000);
+    }
     expect(voiceService.getRecordingState()).toBe(true);
   });
 
@@ -73,17 +131,73 @@ describe('VoiceRecordingService', () => {
     await expect(voiceService.startRecording()).rejects.toThrow('请允许访问麦克风以使用语音录制功能');
   });
 
-  it('should stop recording and return audio blob', async () => {
-    // First start recording
+  it('should handle recorder stop event', async () => {
+    // Create mock stream and track
+    const mockTrack = {
+      stop: vi.fn(),
+    } as any as MediaStreamTrack; // 强制转换类型以解决类型不匹配问题
+    const mockStream = { getTracks: () => [mockTrack] };
+    const mockBlob = new Blob(['test'], { type: 'audio/webm' });
+    
+    // Mock getUserMedia
     (navigator.mediaDevices.getUserMedia as any).mockResolvedValue(mockStream);
+    
+    // Start recording
+    const recordingPromise = voiceService.startRecording();
+
+    // Access the MediaRecorder instance from the service
+    // @ts-ignore - accessing private property for testing
+    const recorderInstance = voiceService['mediaRecorder'];
+    expect(recorderInstance).toBeDefined();
+
+    // Manually trigger the dataavailable event
+    if (recorderInstance && recorderInstance.ondataavailable) {
+      const dataEvent = { data: mockBlob } as unknown as BlobEvent;
+      recorderInstance.ondataavailable(dataEvent);
+    }
+
+    // Simulate the stop event by calling the onstop handler
+    if (recorderInstance && recorderInstance.onstop) {
+      recorderInstance.onstop(new Event('stop'));
+    }
+
+    // Wait for the recording to complete
+    const audioBuffer = await recordingPromise;
+
+    // Verify the recording process
+    expect(audioBuffer).toBeInstanceOf(ArrayBuffer);
+  });
+
+  it('should stop recording and return audio blob', async () => {
+    // Create mock stream and track
+    const mockTrack = {
+      stop: vi.fn(),
+    } as any as MediaStreamTrack; // 强制转换类型以解决类型不匹配问题
+    const mockStream = { getTracks: () => [mockTrack] };
+    const mockBlob = new Blob(['test'], { type: 'audio/webm' });
+    
+    // Mock getUserMedia
+    (navigator.mediaDevices.getUserMedia as any).mockResolvedValue(mockStream);
+    
+    // Start recording
     await voiceService.startRecording();
 
-    // Mock the stop behavior
+    // Access the MediaRecorder instance from the service
+    // @ts-ignore - accessing private property for testing
+    const recorderInstance = voiceService['mediaRecorder'];
+    
+    // Set up the ondataavailable event to provide our mock blob
+    if (recorderInstance && recorderInstance.ondataavailable) {
+      const dataEvent = { data: mockBlob } as unknown as BlobEvent;
+      recorderInstance.ondataavailable(dataEvent);
+    }
+
+    // Stop recording
     const stopPromise = voiceService.stopRecording();
     
     // Simulate the onstop event
-    if (mockMediaRecorder.onstop) {
-      mockMediaRecorder.onstop();
+    if (recorderInstance && recorderInstance.onstop) {
+      recorderInstance.onstop(new Event('stop'));
     }
 
     const audioBlob = await stopPromise;
@@ -92,9 +206,19 @@ describe('VoiceRecordingService', () => {
   });
 
   it('should cancel recording', async () => {
+    // Create mock track with stop method
+    const mockTrack = {
+      stop: vi.fn(),
+    } as any as MediaStreamTrack; // 强制转换类型以解决类型不匹配问题
+    const mockStream = { getTracks: () => [mockTrack] };
+    
+    // Mock getUserMedia
     (navigator.mediaDevices.getUserMedia as any).mockResolvedValue(mockStream);
+    
+    // Start recording
     await voiceService.startRecording();
 
+    // Cancel recording
     voiceService.cancelRecording();
 
     expect(voiceService.getRecordingState()).toBe(false);
