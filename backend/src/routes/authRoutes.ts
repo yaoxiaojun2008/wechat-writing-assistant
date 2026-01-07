@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { body, validationResult } from 'express-validator';
 import { authService } from '../services/authService.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
@@ -17,7 +17,7 @@ router.post('/login',
       .trim()
       .escape(),
   ],
-  async (req: Request, res: Response<ApiResponse<LoginResponse>>) => {
+  async (req: Request, res: Response<ApiResponse<LoginResponse>>, next: NextFunction) => {
     try {
       // Check validation errors
       const errors = validationResult(req);
@@ -56,7 +56,8 @@ router.post('/login',
       });
     } catch (error) {
       logger.error('Login error:', error);
-      throw error;
+      // Pass error to the next middleware instead of throwing it
+      next(error);
     }
   }
 );
@@ -64,7 +65,7 @@ router.post('/login',
 // Logout endpoint
 router.post('/logout',
   authenticateToken,
-  async (req: Request, res: Response<ApiResponse>) => {
+  async (req: Request, res: Response<ApiResponse>, next: NextFunction) => {
     try {
       if (req.sessionId) {
         await authService.destroySession(req.sessionId);
@@ -78,7 +79,7 @@ router.post('/logout',
       });
     } catch (error) {
       logger.error('Logout error:', error);
-      throw error;
+      next(error);
     }
   }
 );
@@ -86,7 +87,7 @@ router.post('/logout',
 // Get current user endpoint
 router.get('/me',
   authenticateToken,
-  async (req: Request, res: Response<ApiResponse>) => {
+  async (req: Request, res: Response<ApiResponse>, next: NextFunction) => {
     try {
       if (!req.user) {
         throw createError('User not found', 404);
@@ -101,7 +102,7 @@ router.get('/me',
       });
     } catch (error) {
       logger.error('Get user error:', error);
-      throw error;
+      next(error);
     }
   }
 );
@@ -109,7 +110,7 @@ router.get('/me',
 // Validate session endpoint
 router.get('/validate',
   authenticateToken,
-  async (req: Request, res: Response<ApiResponse>) => {
+  async (req: Request, res: Response<ApiResponse>, next: NextFunction) => {
     try {
       res.json({
         success: true,
@@ -117,7 +118,7 @@ router.get('/validate',
       });
     } catch (error) {
       logger.error('Session validation error:', error);
-      throw error;
+      next(error);
     }
   }
 );
