@@ -23,28 +23,38 @@ class AuthServiceImpl implements AuthService {
     lastLoginAt: new Date(),
   };
 
+  private passwordHashPromise: Promise<string>;
+
   constructor() {
-    this.initializeDefaultUser();
+    this.passwordHashPromise = this.initializeDefaultUser();
   }
 
-  private initializeDefaultUser() {
+  private initializeDefaultUser(): Promise<string> {
     logger.info('Initializing default user...');
 
     // Create default password hash for development
     const defaultPassword = process.env.DEFAULT_PASSWORD || 'admin123';
     logger.info(`Creating default user with password length: ${defaultPassword.length}`);
 
-    bcrypt.hash(defaultPassword, 10).then(hash => {
+    return bcrypt.hash(defaultPassword, 10).then(hash => {
       this.defaultUser.passwordHash = hash;
       logger.info('Default user initialized with password hash');
+      return hash;
     }).catch(error => {
       logger.error('Failed to hash default password:', error);
+      throw error;
     });
   }
 
   async validatePassword(password: string): Promise<boolean> {
     try {
       logger.info(`Attempting to validate password for user: ${this.defaultUser.id}`);
+
+      // Wait for password hash initialization if needed
+      if (!this.defaultUser.passwordHash) {
+        logger.info('Waiting for password hash initialization...');
+        await this.passwordHashPromise;
+      }
 
       // DEBUG LOGGING
       logger.info(`Input password length: ${password.length}`);
