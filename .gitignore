@@ -104,7 +104,7 @@ audio/
 # Redis dump
 dump.rdb
 # Test files and temporary scripts
-test_*.py
+test_*
 wx1.jpg
 wx1_thumb_*.jpg
 
